@@ -1,0 +1,131 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: config
+  namespace: transmission
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "nfs-ssd-node1"
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Mi
+  persistentVolumeReclaimPolicy: Retain
+      
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: watch
+  namespace: transmission
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "nfs-ssd-node1"
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Mi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: downloads
+  namespace: transmission
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "3"
+  creationTimestamp: null
+  generation: 1
+  labels:
+    run: transmission
+  name: transmission
+  namespace: transmission
+  selfLink: /apis/extensions/v1beta1/namespaces/transmission/deployments/transmission
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: transmission
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: transmission
+    spec:
+      containers:
+      - image: lsioarmhf/transmission
+        imagePullPolicy: Always
+        name: transmission
+        env:
+        - name: PGID
+          value: "1001"
+        - name: PUID
+          value: "1001"
+        - name: TZ
+          value: Europe/Warsaw
+        ports:
+        - containerPort: 9091
+          protocol: TCP
+        - containerPort: 51413
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /config
+          name: config
+        - mountPath: /watch
+          name: watch
+        - mountPath: /downloads
+          name: downloads
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: config
+      - name: watch
+        persistentVolumeClaim:
+          claimName: watch
+      - name: downloads
+        persistentVolumeClaim:
+          claimName: downloads
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: transmission
+  namespace: transmission
+spec:
+  ports:
+    - name: web
+      port: 9091
+    - name: transmission
+      port: 51413
+  selector:
+    run: transmission
+  type: LoadBalancer
